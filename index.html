@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Mi Armario</title>
+<link rel="manifest" href="./manifest.json" />
+<link rel="icon" href="./icon-192.png" />
+<link rel="apple-touch-icon" href="./icon-192.png" />
+<meta name="theme-color" content="#EDE7DA" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Mi Armario" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #EDE7DA;
+    font-family: -apple-system, Roboto, Arial, sans-serif;
+    color: #221F1C;
+    padding-bottom: 90px;
+  }
+  .header { padding: 22px 16px 14px; position: sticky; top: 0; background: #EDE7DA; z-index: 10; border-bottom: 1px solid rgba(34,31,28,0.15); }
+  .header p.eyebrow { font-size: 11px; letter-spacing: 0.08em; color: #B23A2E; font-weight: 700; margin: 0 0 4px; }
+  .header h1 { font-size: 24px; margin: 0 0 12px; }
+  .search-row { display: flex; align-items: center; gap: 8px; background: #F7F4EC; border: 1.5px solid #221F1C; border-radius: 10px; padding: 9px 12px; margin-bottom: 10px; }
+  .search-row input { border: none; background: transparent; outline: none; font-size: 15px; width: 100%; }
+  .scroll-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+  .chip { font-size: 12px; font-weight: 700; padding: 7px 12px; border-radius: 999px; border: 1.5px solid #221F1C; background: transparent; white-space: nowrap; cursor: pointer; flex-shrink: 0; color: #221F1C; }
+  .chip.active { background: #221F1C; color: #F7F4EC; }
+
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 16px; }
+  .card { background: #F7F4EC; border-radius: 12px; overflow: hidden; position: relative; }
+  .card .photo-wrap { aspect-ratio: 1; background: #E3DCCC; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .card .info { padding: 8px 10px 10px; }
+  .card .name { font-size: 13px; font-weight: 700; margin: 0 0 4px; }
+  .card .tags { font-size: 10px; color: #6B6459; margin: 0 0 4px; }
+  .card .price { font-size: 13px; font-weight: 700; color: #B23A2E; margin: 0; }
+  .card .sold-tag { position: absolute; top: 6px; left: 6px; background: #8A7355; color: #fff; font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
+  .card.sold { opacity: 0.5; }
+  .share-btn { position: absolute; bottom: 6px; right: 6px; width: 26px; height: 26px; border-radius: 999px; background: rgba(34,31,28,0.85); color: #fff; border: none; font-size: 13px; }
+
+  .empty { text-align: center; margin: 50px 30px; color: #6B6459; }
+
+  .fab { position: fixed; bottom: 22px; right: 18px; width: 56px; height: 56px; border-radius: 999px; background: #B23A2E; color: #fff; border: none; font-size: 28px; box-shadow: 0 6px 16px rgba(178,58,46,0.4); }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: flex-end; z-index: 50; }
+  .sheet { background: #F7F4EC; width: 100%; max-height: 88vh; overflow-y: auto; border-radius: 18px 18px 0 0; padding: 16px; }
+  .sheet h2 { margin: 0 0 12px; font-size: 18px; }
+  .sheet label { display: block; font-size: 11px; font-weight: 700; color: #6B6459; margin: 12px 0 4px; }
+  .sheet input[type=text], .sheet input[type=number], .sheet textarea {
+    width: 100%; border: 1.5px solid #D8D0BE; border-radius: 8px; padding: 9px 10px; font-size: 15px; background: #fff; outline: none;
+  }
+  .photo-box { width: 100%; aspect-ratio: 4/3; border: 2px dashed #A79E8C; border-radius: 12px; background: #EDE7DA; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #6B6459; font-size: 13px; overflow: hidden; cursor: pointer; }
+  .photo-box img { width: 100%; height: 100%; object-fit: cover; }
+  .close-x { position: absolute; top: 14px; right: 14px; background: #EDE7DA; border: none; border-radius: 999px; width: 30px; height: 30px; font-size: 16px; }
+  .save-btn { width: 100%; background: #221F1C; color: #fff; border: none; border-radius: 9px; padding: 13px; font-size: 15px; font-weight: 700; margin-top: 16px; }
+  .delete-btn { width: 100%; background: transparent; color: #B23A2E; border: 1.5px solid #B23A2E; border-radius: 9px; padding: 11px; font-size: 14px; font-weight: 700; margin-top: 10px; }
+  .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: #221F1C; color: #fff; font-size: 13px; padding: 9px 15px; border-radius: 999px; z-index: 60; max-width: 85%; text-align: center; }
+  .privacy-note { margin: 0 16px 6px; font-size: 11.5px; color: #6B6459; background: #F7F4EC; border-radius: 8px; padding: 8px 10px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <p class="eyebrow" id="eyebrow">INVENTARIO</p>
+  <h1>Ropita en venta</h1>
+  <p class="privacy-note">🔒 Esto queda guardado solo en este celular. Nadie más lo ve.</p>
+  <div class="search-row">
+    <span>🔍</span>
+    <input type="text" id="search" placeholder="Buscar por nombre, color o nota..." />
+  </div>
+  <div class="scroll-row" id="catFilters"></div>
+  <div class="scroll-row" id="sizeFilters" style="margin-top:6px;"></div>
+  <div id="shareSizeBtnBox"></div>
+</div>
+
+<div id="grid" class="grid"></div>
+<div id="emptyState" class="empty" style="display:none;"></div>
+
+<button class="fab" onclick="openAddForm()">+</button>
+
+<div id="modalRoot"></div>
+<div id="toastRoot"></div>
+
+<script>
+/* ---------- Datos fijos ---------- */
+const CATEGORIES = [
+  { id: "remeras_mc", label: "Remera M. Corta" },
+  { id: "remeras_ml", label: "Remera M. Larga" },
+  { id: "bodys", label: "Bodys" },
+  { id: "pantalones", label: "Pantalones" },
+  { id: "shorts", label: "Shorts" },
+  { id: "conjuntos", label: "Conjuntos" },
+  { id: "baberos", label: "Baberos" },
+  { id: "toallas", label: "Toallas" },
+  { id: "pulover", label: "Pulóver" },
+  { id: "otro", label: "Otro" },
+];
+const SIZE_ORDER = ["RN","0-3M","3-6M","6-9M","9-12M","12-18M","18-24M","1","2","3","4","5","6","7","8","2A","3A","4A","6A","8A","10A","12A"];
+const STATUSES = [
+  { id: "disponible", label: "Disponible" },
+  { id: "reservado", label: "Reservado" },
+  { id: "vendido", label: "Vendido" },
+];
+
+let items = [];
+let activeCat = "all";
+let activeSize = "all";
+let searchQuery = "";
+let currentPhoto = null;
+let editingId = null;
+
+const catLabel = id => (CATEGORIES.find(c => c.id === id) || {label:"Otro"}).label;
+const statusLabel = id => (STATUSES.find(s => s.id === id) || {label:""}).label;
+function formatPrice(v){ if(!v) return ""; const n = Number(v); return isNaN(n) ? "" : n.toLocaleString("es"); }
+function sizeSort(a,b){ const ia=SIZE_ORDER.indexOf(a), ib=SIZE_ORDER.indexOf(b); if(ia===-1&&ib===-1) return a.localeCompare(b); if(ia===-1) return 1; if(ib===-1) return -1; return ia-ib; }
+function esc(s){ const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
+
+/* ---------- Guardado local (localStorage) ---------- */
+function loadItems(){
+  try{
+    const raw = localStorage.getItem("mi_armario_items");
+    items = raw ? JSON.parse(raw) : [];
+  }catch(e){ items = []; }
+}
+function saveItems(){
+  try{
+    localStorage.setItem("mi_armario_items", JSON.stringify(items));
+    return true;
+  }catch(e){
+    showToast("No se pudo guardar (memoria llena). Borrá alguna prenda vieja o usá fotos más chicas.");
+    return false;
+  }
+}
+
+/* ---------- Toast ---------- */
+let toastTimer = null;
+function showToast(msg){
+  const root = document.getElementById("toastRoot");
+  root.innerHTML = '<div class="toast">' + esc(msg) + '</div>';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { root.innerHTML = ""; }, 2500);
+}
+
+/* ---------- Render filtros ---------- */
+function renderFilters(){
+  const catBox = document.getElementById("catFilters");
+  const counts = {};
+  items.forEach(i => { counts[i.category] = (counts[i.category]||0)+1; });
+  let html = '<button class="chip ' + (activeCat==="all"?"active":"") + '" onclick="setCat(\'all\')">TODO (' + items.length + ')</button>';
+  CATEGORIES.forEach(c => {
+    html += '<button class="chip ' + (activeCat===c.id?"active":"") + '" onclick="setCat(\'' + c.id + '\')">' + esc(c.label.toUpperCase()) + ' (' + (counts[c.id]||0) + ')</button>';
+  });
+  catBox.innerHTML = html;
+
+  const sizeCounts = {};
+  items.forEach(i => { if(i.size) sizeCounts[i.size] = (sizeCounts[i.size]||0)+1; });
+  const sizes = Object.keys(sizeCounts).sort(sizeSort);
+  const sizeBox = document.getElementById("sizeFilters");
+  const shareBtnBox = document.getElementById("shareSizeBtnBox");
+  if(sizes.length === 0){
+    sizeBox.innerHTML = '<span style="font-size:12px;color:#6B6459;">Los talles aparecen acá a medida que cargues prendas.</span>';
+    shareBtnBox.innerHTML = "";
+    return;
+  }
+  let shtml = '<button class="chip ' + (activeSize==="all"?"active":"") + '" onclick="setSize(\'all\')">TODOS LOS TALLES</button>';
+  sizes.forEach(sz => {
+    shtml += '<button class="chip ' + (activeSize===sz?"active":"") + '" onclick="setSize(\'' + sz + '\')">' + esc(sz) + ' (' + sizeCounts[sz] + ')</button>';
+  });
+  sizeBox.innerHTML = shtml;
+
+  if(activeSize !== "all"){
+    shareBtnBox.innerHTML = '<button class="save-btn" style="margin-top:8px;font-size:13px;padding:10px;" onclick="shareSize()">↗ Compartir disponibles talle ' + esc(activeSize) + '</button>';
+  }else{
+    shareBtnBox.innerHTML = "";
+  }
+}
+function setCat(id){ activeCat = id; renderAll(); }
+function setSize(id){ activeSize = id; renderAll(); }
+
+/* ---------- Render grilla ---------- */
+function renderGrid(){
+  const grid = document.getElementById("grid");
+  const empty = document.getElementById("emptyState");
+  const q = searchQuery.trim().toLowerCase();
+  const filtered = items.filter(i => {
+    const mc = activeCat === "all" || i.category === activeCat;
+    const ms = activeSize === "all" || i.size === activeSize;
+    const mq = !q || (i.name||"").toLowerCase().includes(q) || (i.color||"").toLowerCase().includes(q) || (i.notes||"").toLowerCase().includes(q);
+    return mc && ms && mq;
+  });
+
+  if(filtered.length === 0){
+    grid.style.display = "none";
+    empty.style.display = "block";
+    empty.innerHTML = items.length === 0
+      ? "<h3>Tu armario está vacío</h3><p>Tocá el botón + para añadir tu primera prenda.</p>"
+      : "<h3>Sin resultados</h3><p>Probá con otra búsqueda, categoría o talle.</p>";
+    return;
+  }
+  grid.style.display = "grid";
+  empty.style.display = "none";
+
+  grid.innerHTML = filtered.map(item => {
+    const sold = item.status === "vendido";
+    const priceHtml = item.price ? '<p class="price">$' + formatPrice(item.price) + '</p>' : "";
+    const sizeHtml = item.size ? ' · ' + esc(item.size) : "";
+    const soldTag = (item.status && item.status !== "disponible") ? '<span class="sold-tag">' + esc(statusLabel(item.status).toUpperCase()) + '</span>' : "";
+    const photoHtml = item.photo ? '<img src="' + item.photo + '" />' : '👕';
+    return (
+      '<div class="card ' + (sold ? "sold" : "") + '">' +
+        '<div class="photo-wrap" onclick="openDetail(\'' + item.id + '\')">' + soldTag + photoHtml + '</div>' +
+        '<div class="info" onclick="openDetail(\'' + item.id + '\')">' +
+          '<p class="name">' + esc(item.name) + '</p>' +
+          '<p class="tags">' + esc(catLabel(item.category)) + sizeHtml + '</p>' +
+          priceHtml +
+        '</div>' +
+        '<button class="share-btn" onclick="shareItem(\'' + item.id + '\')">↗</button>' +
+      '</div>'
+    );
+  }).join("");
+}
+
+function renderAll(){
+  renderFilters();
+  renderGrid();
+  document.getElementById("eyebrow").textContent =
+    "INVENTARIO · " + items.length + " PRENDA" + (items.length===1?"":"S") +
+    " · " + items.filter(i => i.status !== "vendido").length + " DISPONIBLE" +
+    (items.filter(i => i.status !== "vendido").length===1?"":"S");
+}
+
+/* ---------- Formulario agregar / editar ---------- */
+function openAddForm(){
+  editingId = null;
+  currentPhoto = null;
+  showForm({name:"", category:"remeras_mc", size:"", color:"", price:"", status:"disponible", notes:"", photo:null});
+}
+function openEditForm(id){
+  const item = items.find(i => i.id === id);
+  if(!item) return;
+  editingId = id;
+  currentPhoto = item.photo || null;
+  showForm(item);
+}
+
+function showForm(data){
+  const catChips = CATEGORIES.map(c =>
+    '<button type="button" class="chip ' + (data.category===c.id?"active":"") + '" onclick="pickCat(\'' + c.id + '\')" id="catchip-' + c.id + '">' + esc(c.label) + '</button>'
+  ).join("");
+  const sizeChips = SIZE_ORDER.map(sz =>
+    '<button type="button" class="chip" onclick="pickSize(\'' + sz + '\')" id="sizechip-' + sz + '">' + esc(sz) + '</button>'
+  ).join("");
+  const statusChips = STATUSES.map(s =>
+    '<button type="button" class="chip ' + (data.status===s.id?"active":"") + '" onclick="pickStatus(\'' + s.id + '\')" id="statchip-' + s.id + '">' + esc(s.label) + '</button>'
+  ).join("");
+
+  document.getElementById("modalRoot").innerHTML =
+    '<div class="overlay" onclick="closeModal(event)">' +
+      '<div class="sheet" onclick="event.stopPropagation()" style="position:relative;">' +
+        '<button class="close-x" onclick="closeModal()">✕</button>' +
+        '<h2>' + (editingId ? "Editar prenda" : "Nueva prenda") + '</h2>' +
+        '<div class="photo-box" id="photoBox" onclick="document.getElementById(\'photoInput\').click()">' +
+          (data.photo ? '<img src="' + data.photo + '" />' : '📷 Añadir foto') +
+        '</div>' +
+        '<input type="file" id="photoInput" accept="image/*" style="display:none" onchange="handlePhoto(event)" />' +
+
+        '<label>Nombre</label>' +
+        '<input type="text" id="fName" value="' + esc(data.name) + '" placeholder="Remera manga corta dino" maxlength="60" />' +
+
+        '<label>Categoría</label>' +
+        '<div class="scroll-row" style="flex-wrap:wrap;overflow:visible;">' + catChips + '</div>' +
+
+        '<label>Talle</label>' +
+        '<input type="text" id="fSize" value="' + esc(data.size) + '" placeholder="Ej: 2, RN, 6-9M, 4A" maxlength="12" />' +
+        '<div class="scroll-row" style="flex-wrap:wrap;overflow:visible;margin-top:6px;">' + sizeChips + '</div>' +
+
+        '<label>Color</label>' +
+        '<input type="text" id="fColor" value="' + esc(data.color) + '" placeholder="Azul marino" maxlength="30" />' +
+
+        '<label>Precio</label>' +
+        '<input type="text" inputmode="numeric" id="fPrice" value="' + esc(data.price) + '" placeholder="15000" />' +
+
+        '<label>Estado</label>' +
+        '<div class="scroll-row" style="flex-wrap:wrap;overflow:visible;">' + statusChips + '</div>' +
+
+        '<label>Notas</label>' +
+        '<textarea id="fNotes" rows="2" maxlength="200" placeholder="Marca, estado de la prenda, defectos...">' + esc(data.notes) + '</textarea>' +
+
+        '<button class="save-btn" onclick="saveForm()">Guardar prenda</button>' +
+        (editingId ? '<button class="delete-btn" onclick="deleteItem(\'' + editingId + '\')">Eliminar prenda</button>' : "") +
+      '</div>' +
+    '</div>';
+
+  window.formCategory = data.category;
+  window.formSize = data.size;
+  window.formStatus = data.status;
+  if(data.category) highlight("catchip-" + data.category, true);
+  if(data.size) highlight("sizechip-" + data.size, true);
+  if(data.status) highlight("statchip-" + data.status, true);
+}
+
+function highlight(id, on){
+  const el = document.getElementById(id);
+  if(el) el.classList.toggle("active", on);
+}
+function pickCat(id){
+  highlight("catchip-" + window.formCategory, false);
+  window.formCategory = id;
+  highlight("catchip-" + id, true);
+}
+function pickSize(sz){
+  if(window.formSize) highlight("sizechip-" + window.formSize, false);
+  window.formSize = (window.formSize === sz) ? "" : sz;
+  document.getElementById("fSize").value = window.formSize;
+  if(window.formSize) highlight("sizechip-" + window.formSize, true);
+}
+function pickStatus(id){
+  highlight("statchip-" + window.formStatus, false);
+  window.formStatus = id;
+  highlight("statchip-" + id, true);
+}
+
+function handlePhoto(e){
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  const box = document.getElementById("photoBox");
+  box.textContent = "Cargando...";
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    const img = new Image();
+    img.onload = function(){
+      const maxW = 800;
+      const scale = Math.min(1, maxW / img.width);
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      currentPhoto = canvas.toDataURL("image/jpeg", 0.7);
+      box.innerHTML = '<img src="' + currentPhoto + '" />';
+    };
+    img.onerror = function(){ showToast("No se pudo leer esa imagen."); };
+    img.src = ev.target.result;
+  };
+  reader.onerror = function(){ showToast("No se pudo leer esa imagen."); };
+  reader.readAsDataURL(file);
+}
+
+function saveForm(){
+  const name = document.getElementById("fName").value.trim();
+  if(!name){ showToast("Ponele un nombre a la prenda."); return; }
+  const data = {
+    id: editingId || ("g" + Date.now()),
+    name: name,
+    category: window.formCategory || "otro",
+    size: document.getElementById("fSize").value.trim(),
+    color: document.getElementById("fColor").value.trim(),
+    price: document.getElementById("fPrice").value.replace(/[^0-9]/g,""),
+    status: window.formStatus || "disponible",
+    notes: document.getElementById("fNotes").value.trim(),
+    photo: currentPhoto,
+    createdAt: editingId ? (items.find(i=>i.id===editingId)||{}).createdAt || Date.now() : Date.now(),
+  };
+  if(editingId){
+    items = items.map(i => i.id === editingId ? data : i);
+  }else{
+    items.unshift(data);
+  }
+  if(saveItems()){
+    closeModal();
+    renderAll();
+  }
+}
+
+function deleteItem(id){
+  items = items.filter(i => i.id !== id);
+  saveItems();
+  closeModal();
+  renderAll();
+}
+
+function closeModal(e){
+  if(e && e.target !== e.currentTarget) return;
+  document.getElementById("modalRoot").innerHTML = "";
+}
+
+/* ---------- Detalle ---------- */
+function openDetail(id){
+  openEditForm(id);
+}
+
+/* ---------- Compartir ---------- */
+function itemToText(item){
+  let t = item.name + " — " + catLabel(item.category);
+  if(item.size) t += " · Talle " + item.size;
+  if(item.price) t += " · $" + formatPrice(item.price);
+  if(item.notes) t += "\n" + item.notes;
+  return t;
+}
+function shareSize(){
+  const avail = items.filter(i => i.size === activeSize && i.status !== "vendido");
+  if(avail.length === 0){ showToast("No hay prendas disponibles en ese talle."); return; }
+  let text = "Disponible talle " + activeSize + ":\n\n";
+  avail.forEach(i => {
+    text += "• " + i.name;
+    if(i.price) text += " — $" + formatPrice(i.price);
+    text += "\n";
+  });
+  if(navigator.share){
+    navigator.share({text: text}).catch(function(){});
+  }else if(navigator.clipboard){
+    navigator.clipboard.writeText(text).then(function(){
+      showToast("Copiado. Pégalo en WhatsApp.");
+    }).catch(function(){
+      prompt("Copiá este texto:", text);
+    });
+  }else{
+    prompt("Copiá este texto:", text);
+  }
+}
+function shareItem(id){
+  const item = items.find(i => i.id === id);
+  if(!item) return;
+  const text = itemToText(item);
+  if(navigator.share){
+    navigator.share({text: text}).catch(function(){});
+  }else if(navigator.clipboard){
+    navigator.clipboard.writeText(text).then(function(){
+      showToast("Copiado. Pégalo en WhatsApp.");
+    }).catch(function(){
+      showToast(text);
+    });
+  }else{
+    prompt("Copiá este texto:", text);
+  }
+}
+
+/* ---------- Buscador ---------- */
+document.getElementById("search").addEventListener("input", function(e){
+  searchQuery = e.target.value;
+  renderGrid();
+});
+
+/* ---------- Inicio ---------- */
+loadItems();
+renderAll();
+</script>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("./service-worker.js").catch(function () {});
+    });
+  }
+</script>
+</body>
+</html>
