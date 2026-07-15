@@ -53,7 +53,7 @@
     width: 100%; border: 1.5px solid #D8D0BE; border-radius: 8px; padding: 9px 10px; font-size: 15px; background: #fff; outline: none;
   }
   .photo-box { width: 100%; aspect-ratio: 4/3; border: 2px dashed #A79E8C; border-radius: 12px; background: #EDE7DA; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #6B6459; font-size: 13px; overflow: hidden; cursor: pointer; }
-  .photo-box img { width: 100%; height: 100%; object-fit: cover; }
+  .photo-box img { width: 100%; height: 100%; object-fit: contain; background: #221F1C; }
   .close-x { position: absolute; top: 14px; right: 14px; background: #EDE7DA; border: none; border-radius: 999px; width: 30px; height: 30px; font-size: 16px; }
   .save-btn { width: 100%; background: #221F1C; color: #fff; border: none; border-radius: 9px; padding: 13px; font-size: 15px; font-weight: 700; margin-top: 16px; }
   .delete-btn { width: 100%; background: transparent; color: #B23A2E; border: 1.5px solid #B23A2E; border-radius: 9px; padding: 11px; font-size: 14px; font-weight: 700; margin-top: 10px; }
@@ -400,7 +400,17 @@ function itemToText(item){
   if(item.notes) t += "\n" + item.notes;
   return t;
 }
-function shareSize(){
+function dataUrlToFile(dataUrl, filename){
+  const arr = dataUrl.split(",");
+  const mimeMatch = arr[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while(n--){ u8arr[n] = bstr.charCodeAt(n); }
+  return new File([u8arr], filename, { type: mime });
+}
+async function shareSize(){
   const avail = items.filter(i => i.size === activeSize && i.status !== "vendido");
   if(avail.length === 0){ showToast("No hay prendas disponibles en ese talle."); return; }
   let text = "Disponible talle " + activeSize + ":\n\n";
@@ -409,32 +419,57 @@ function shareSize(){
     if(i.price) text += " — $" + formatPrice(i.price);
     text += "\n";
   });
-  if(navigator.share){
-    navigator.share({text: text}).catch(function(){});
-  }else if(navigator.clipboard){
-    navigator.clipboard.writeText(text).then(function(){
-      showToast("Copiado. Pégalo en WhatsApp.");
-    }).catch(function(){
+  const photos = avail.filter(i => i.photo).slice(0, 8);
+  try{
+    if(navigator.share){
+      if(photos.length && navigator.canShare){
+        const files = photos.map((i, idx) => dataUrlToFile(i.photo, "prenda" + idx + ".jpg"));
+        if(navigator.canShare({ files: files })){
+          await navigator.share({ text: text, files: files });
+          return;
+        }
+      }
+      await navigator.share({ text: text });
+      return;
+    }
+    throw new Error("no-share");
+  }catch(err){
+    if(err && err.name === "AbortError") return;
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(text).then(function(){
+        showToast("Copiado. Pégalo en WhatsApp (las fotos compartilas aparte).");
+      }).catch(function(){ prompt("Copiá este texto:", text); });
+    }else{
       prompt("Copiá este texto:", text);
-    });
-  }else{
-    prompt("Copiá este texto:", text);
+    }
   }
 }
-function shareItem(id){
+async function shareItem(id){
   const item = items.find(i => i.id === id);
   if(!item) return;
   const text = itemToText(item);
-  if(navigator.share){
-    navigator.share({text: text}).catch(function(){});
-  }else if(navigator.clipboard){
-    navigator.clipboard.writeText(text).then(function(){
-      showToast("Copiado. Pégalo en WhatsApp.");
-    }).catch(function(){
-      showToast(text);
-    });
-  }else{
-    prompt("Copiá este texto:", text);
+  try{
+    if(navigator.share){
+      if(item.photo && navigator.canShare){
+        const file = dataUrlToFile(item.photo, "prenda.jpg");
+        if(navigator.canShare({ files: [file] })){
+          await navigator.share({ text: text, files: [file] });
+          return;
+        }
+      }
+      await navigator.share({ text: text });
+      return;
+    }
+    throw new Error("no-share");
+  }catch(err){
+    if(err && err.name === "AbortError") return;
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(text).then(function(){
+        showToast("Copiado. Pégalo en WhatsApp.");
+      }).catch(function(){ showToast(text); });
+    }else{
+      prompt("Copiá este texto:", text);
+    }
   }
 }
 
