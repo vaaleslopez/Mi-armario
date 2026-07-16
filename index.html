@@ -59,6 +59,16 @@
   .delete-btn { width: 100%; background: transparent; color: #B23A2E; border: 1.5px solid #B23A2E; border-radius: 9px; padding: 11px; font-size: 14px; font-weight: 700; margin-top: 10px; }
   .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: #221F1C; color: #fff; font-size: 13px; padding: 9px 15px; border-radius: 999px; z-index: 60; max-width: 85%; text-align: center; }
   .privacy-note { margin: 0 16px 6px; font-size: 11.5px; color: #6B6459; background: #F7F4EC; border-radius: 8px; padding: 8px 10px; }
+  .size-add-row { display: flex; gap: 6px; align-items: stretch; margin-top: 8px; }
+  .size-add-row input[type=text] { flex: 2; }
+  .size-add-row input[type=number] { flex: 1; min-width: 0; }
+  .size-add-row button { flex-shrink: 0; background: #221F1C; color: #fff; border: none; border-radius: 8px; padding: 0 14px; font-size: 18px; font-weight: 700; }
+  .size-entry-list { margin-top: 10px; }
+  .size-entry-row { display: flex; align-items: center; justify-content: space-between; background: #fff; border: 1px solid #D8D0BE; border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; font-size: 14px; }
+  .size-entry-row b { font-family: monospace; }
+  .size-entry-row .rm { background: none; border: none; color: #B23A2E; font-size: 17px; font-weight: 700; padding: 0 4px; }
+  .size-hint { font-size: 11.5px; color: #6B6459; margin-top: 4px; }
+  .card .tags2 { font-size: 10.5px; color: #4A443C; margin: 0 0 4px; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -124,6 +134,15 @@ function loadItems(){
     const raw = localStorage.getItem("mi_armario_items");
     items = raw ? JSON.parse(raw) : [];
   }catch(e){ items = []; }
+  let migrated = false;
+  items.forEach(i => {
+    if(!i.sizes){
+      i.sizes = i.size ? [{size: i.size, qty: 1}] : [];
+      delete i.size;
+      migrated = true;
+    }
+  });
+  if(migrated) saveItems();
 }
 function saveItems(){
   try{
@@ -156,7 +175,7 @@ function renderFilters(){
   catBox.innerHTML = html;
 
   const sizeCounts = {};
-  items.forEach(i => { if(i.size) sizeCounts[i.size] = (sizeCounts[i.size]||0)+1; });
+  items.forEach(i => { (i.sizes||[]).forEach(s => { sizeCounts[s.size] = (sizeCounts[s.size]||0) + (Number(s.qty)||0); }); });
   const sizes = Object.keys(sizeCounts).sort(sizeSort);
   const sizeBox = document.getElementById("sizeFilters");
   const shareBtnBox = document.getElementById("shareSizeBtnBox");
@@ -187,7 +206,7 @@ function renderGrid(){
   const q = searchQuery.trim().toLowerCase();
   const filtered = items.filter(i => {
     const mc = activeCat === "all" || i.category === activeCat;
-    const ms = activeSize === "all" || i.size === activeSize;
+    const ms = activeSize === "all" || (i.sizes||[]).some(s => s.size === activeSize);
     const mq = !q || (i.name||"").toLowerCase().includes(q) || (i.color||"").toLowerCase().includes(q) || (i.notes||"").toLowerCase().includes(q);
     return mc && ms && mq;
   });
@@ -206,7 +225,11 @@ function renderGrid(){
   grid.innerHTML = filtered.map(item => {
     const sold = item.status === "vendido";
     const priceHtml = item.price ? '<p class="price">$' + formatPrice(item.price) + '</p>' : "";
-    const sizeHtml = item.size ? ' · ' + esc(item.size) : "";
+    const sizesArr = item.sizes || [];
+    const totalQty = sizesArr.reduce((a,s) => a + (Number(s.qty)||0), 0);
+    const sizesHtml = sizesArr.length
+      ? '<p class="tags2">' + sizesArr.map(s => esc(s.size) + ' (x' + s.qty + ')').join(' · ') + '</p>'
+      : "";
     const soldTag = (item.status && item.status !== "disponible") ? '<span class="sold-tag">' + esc(statusLabel(item.status).toUpperCase()) + '</span>' : "";
     const photoHtml = item.photo ? '<img src="' + item.photo + '" />' : '👕';
     return (
@@ -214,7 +237,8 @@ function renderGrid(){
         '<div class="photo-wrap" onclick="openDetail(\'' + item.id + '\')">' + soldTag + photoHtml + '</div>' +
         '<div class="info" onclick="openDetail(\'' + item.id + '\')">' +
           '<p class="name">' + esc(item.name) + '</p>' +
-          '<p class="tags">' + esc(catLabel(item.category)) + sizeHtml + '</p>' +
+          '<p class="tags">' + esc(catLabel(item.category)) + (totalQty ? ' · Stock: ' + totalQty : '') + '</p>' +
+          sizesHtml +
           priceHtml +
         '</div>' +
         '<button class="share-btn" onclick="shareItem(\'' + item.id + '\')">↗</button>' +
@@ -236,7 +260,7 @@ function renderAll(){
 function openAddForm(){
   editingId = null;
   currentPhoto = null;
-  showForm({name:"", category:"remeras_mc", size:"", color:"", price:"", status:"disponible", notes:"", photo:null});
+  showForm({name:"", category:"remeras_mc", sizes:[], color:"", price:"", status:"disponible", notes:"", photo:null});
 }
 function openEditForm(id){
   const item = items.find(i => i.id === id);
@@ -251,7 +275,7 @@ function showForm(data){
     '<button type="button" class="chip ' + (data.category===c.id?"active":"") + '" onclick="pickCat(\'' + c.id + '\')" id="catchip-' + c.id + '">' + esc(c.label) + '</button>'
   ).join("");
   const sizeChips = SIZE_ORDER.map(sz =>
-    '<button type="button" class="chip" onclick="pickSize(\'' + sz + '\')" id="sizechip-' + sz + '">' + esc(sz) + '</button>'
+    '<button type="button" class="chip" onclick="quickFillSize(\'' + sz + '\')">' + esc(sz) + '</button>'
   ).join("");
   const statusChips = STATUSES.map(s =>
     '<button type="button" class="chip ' + (data.status===s.id?"active":"") + '" onclick="pickStatus(\'' + s.id + '\')" id="statchip-' + s.id + '">' + esc(s.label) + '</button>'
@@ -268,14 +292,20 @@ function showForm(data){
         '<input type="file" id="photoInput" accept="image/*" style="display:none" onchange="handlePhoto(event)" />' +
 
         '<label>Nombre</label>' +
-        '<input type="text" id="fName" value="' + esc(data.name) + '" placeholder="Remera manga corta dino" maxlength="60" />' +
+        '<input type="text" id="fName" value="' + esc(data.name) + '" placeholder="Conjunto rayado dino" maxlength="60" />' +
 
         '<label>Categoría</label>' +
         '<div class="scroll-row" style="flex-wrap:wrap;overflow:visible;">' + catChips + '</div>' +
 
-        '<label>Talle</label>' +
-        '<input type="text" id="fSize" value="' + esc(data.size) + '" placeholder="Ej: 2, RN, 6-9M, 4A" maxlength="12" />' +
+        '<label>Talles y cantidad en stock</label>' +
+        '<div class="size-add-row">' +
+          '<input type="text" id="newSizeInput" placeholder="Talle (ej: 2, RN, 4A)" maxlength="12" />' +
+          '<input type="number" id="newSizeQty" placeholder="Cant." min="1" value="1" />' +
+          '<button type="button" onclick="addSizeEntry()">+</button>' +
+        '</div>' +
         '<div class="scroll-row" style="flex-wrap:wrap;overflow:visible;margin-top:6px;">' + sizeChips + '</div>' +
+        '<p class="size-hint">Tocá un talle de arriba para completar el campo rápido, poné la cantidad y tocá +.</p>' +
+        '<div class="size-entry-list" id="sizeEntryList"></div>' +
 
         '<label>Color</label>' +
         '<input type="text" id="fColor" value="' + esc(data.color) + '" placeholder="Azul marino" maxlength="30" />' +
@@ -295,11 +325,48 @@ function showForm(data){
     '</div>';
 
   window.formCategory = data.category;
-  window.formSize = data.size;
   window.formStatus = data.status;
+  window.formSizes = (data.sizes || []).map(s => ({size: s.size, qty: Number(s.qty)||1}));
   if(data.category) highlight("catchip-" + data.category, true);
-  if(data.size) highlight("sizechip-" + data.size, true);
   if(data.status) highlight("statchip-" + data.status, true);
+  renderSizeEntryList();
+}
+
+function quickFillSize(sz){
+  document.getElementById("newSizeInput").value = sz;
+}
+
+function renderSizeEntryList(){
+  const box = document.getElementById("sizeEntryList");
+  if(!box) return;
+  if(!window.formSizes || window.formSizes.length === 0){
+    box.innerHTML = '<p class="size-hint">Todavía no agregaste ningún talle.</p>';
+    return;
+  }
+  box.innerHTML = window.formSizes.map((s, idx) =>
+    '<div class="size-entry-row"><span>Talle <b>' + esc(s.size) + '</b> — cantidad: <b>' + s.qty + '</b></span>' +
+    '<button type="button" class="rm" onclick="removeSizeEntry(' + idx + ')">✕</button></div>'
+  ).join("");
+}
+
+function addSizeEntry(){
+  const sizeVal = document.getElementById("newSizeInput").value.trim();
+  const qtyVal = parseInt(document.getElementById("newSizeQty").value, 10) || 1;
+  if(!sizeVal){ showToast("Escribí o elegí un talle primero."); return; }
+  const existing = window.formSizes.find(s => s.size.toLowerCase() === sizeVal.toLowerCase());
+  if(existing){
+    existing.qty += qtyVal;
+  }else{
+    window.formSizes.push({size: sizeVal, qty: qtyVal});
+  }
+  document.getElementById("newSizeInput").value = "";
+  document.getElementById("newSizeQty").value = "1";
+  renderSizeEntryList();
+}
+
+function removeSizeEntry(idx){
+  window.formSizes.splice(idx, 1);
+  renderSizeEntryList();
 }
 
 function highlight(id, on){
@@ -310,12 +377,6 @@ function pickCat(id){
   highlight("catchip-" + window.formCategory, false);
   window.formCategory = id;
   highlight("catchip-" + id, true);
-}
-function pickSize(sz){
-  if(window.formSize) highlight("sizechip-" + window.formSize, false);
-  window.formSize = (window.formSize === sz) ? "" : sz;
-  document.getElementById("fSize").value = window.formSize;
-  if(window.formSize) highlight("sizechip-" + window.formSize, true);
 }
 function pickStatus(id){
   highlight("statchip-" + window.formStatus, false);
@@ -356,7 +417,7 @@ function saveForm(){
     id: editingId || ("g" + Date.now()),
     name: name,
     category: window.formCategory || "otro",
-    size: document.getElementById("fSize").value.trim(),
+    sizes: (window.formSizes || []).slice(),
     color: document.getElementById("fColor").value.trim(),
     price: document.getElementById("fPrice").value.replace(/[^0-9]/g,""),
     status: window.formStatus || "disponible",
@@ -395,7 +456,8 @@ function openDetail(id){
 /* ---------- Compartir ---------- */
 function itemToText(item){
   let t = item.name + " — " + catLabel(item.category);
-  if(item.size) t += " · Talle " + item.size;
+  const sizesArr = item.sizes || [];
+  if(sizesArr.length) t += " · Talles: " + sizesArr.map(s => s.size + " (x" + s.qty + ")").join(", ");
   if(item.price) t += " · $" + formatPrice(item.price);
   if(item.notes) t += "\n" + item.notes;
   return t;
@@ -411,11 +473,13 @@ function dataUrlToFile(dataUrl, filename){
   return new File([u8arr], filename, { type: mime });
 }
 async function shareSize(){
-  const avail = items.filter(i => i.size === activeSize && i.status !== "vendido");
+  const avail = items.filter(i => (i.sizes||[]).some(s => s.size === activeSize) && i.status !== "vendido");
   if(avail.length === 0){ showToast("No hay prendas disponibles en ese talle."); return; }
   let text = "Disponible talle " + activeSize + ":\n\n";
   avail.forEach(i => {
-    text += "• " + i.name;
+    const entry = (i.sizes||[]).find(s => s.size === activeSize);
+    const qty = entry ? entry.qty : 1;
+    text += "• " + i.name + " (x" + qty + ")";
     if(i.price) text += " — $" + formatPrice(i.price);
     text += "\n";
   });
