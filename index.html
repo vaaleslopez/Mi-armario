@@ -69,7 +69,6 @@
   .size-entry-row .rm { background: none; border: none; color: #B23A2E; font-size: 17px; font-weight: 700; padding: 0 4px; }
   .size-hint { font-size: 11.5px; color: #6B6459; margin-top: 4px; }
   .card .tags2 { font-size: 10.5px; color: #4A443C; margin: 0 0 4px; line-height: 1.5; }
-  .summary-open-btn { display: block; width: 100%; text-align: left; background: #F7F4EC; border: 1.5px solid #221F1C; border-radius: 10px; padding: 10px 12px; font-size: 13px; font-weight: 700; color: #221F1C; margin-bottom: 10px; }
   .stock-btn { position: absolute; bottom: 6px; left: 6px; width: 26px; height: 26px; border-radius: 999px; background: rgba(34,31,28,0.85); color: #fff; border: none; font-size: 13px; }
   .qty-row { display: flex; align-items: center; justify-content: space-between; background: #fff; border: 1px solid #D8D0BE; border-radius: 9px; padding: 9px 10px; margin-bottom: 8px; }
   .qty-row .qty-label { font-size: 14px; }
@@ -84,6 +83,16 @@
   .sold-row { display: flex; align-items: center; justify-content: space-between; background: #fff; border: 1px solid #D8D0BE; border-radius: 9px; padding: 9px 10px; margin-bottom: 6px; font-size: 13px; }
   .sold-row .undo-btn { background: none; border: none; color: #B23A2E; font-size: 11px; font-weight: 700; white-space: nowrap; margin-left: 8px; }
   .sold-row .meta { color: #6B6459; font-size: 11.5px; }
+  .tab-bar { display: flex; gap: 6px; margin-bottom: 10px; }
+  .tab-btn { flex: 1; text-align: center; padding: 9px 0; border-radius: 9px; border: 1.5px solid #221F1C; background: transparent; font-size: 13px; font-weight: 700; color: #221F1C; }
+  .tab-btn.active { background: #221F1C; color: #F7F4EC; }
+  .stock-card { background: #F7F4EC; border-radius: 12px; padding: 12px; margin: 0 16px 12px; }
+  .stock-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .stock-thumb { width: 44px; height: 44px; border-radius: 8px; overflow: hidden; background: #E3DCCC; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 20px; }
+  .stock-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .stock-name { font-size: 14px; font-weight: 700; margin: 0; }
+  .stock-meta { font-size: 11.5px; color: #6B6459; margin: 2px 0 0; }
+  .stock-list-wrap { padding: 4px 0 16px; }
 </style>
 </head>
 <body>
@@ -92,20 +101,37 @@
   <p class="eyebrow" id="eyebrow">INVENTARIO</p>
   <h1>Ropita en venta</h1>
   <p class="privacy-note">🔒 Esto queda guardado solo en este celular. Nadie más lo ve.</p>
-  <button class="summary-open-btn" onclick="openSummary()">📊 Ver stock y vendidos</button>
-  <div class="search-row">
+  <div class="tab-bar" id="tabBar"></div>
+  <div class="search-row" id="searchRow">
     <span>🔍</span>
     <input type="text" id="search" placeholder="Buscar por nombre, color o nota..." />
   </div>
-  <div class="scroll-row" id="catFilters"></div>
-  <div class="scroll-row" id="sizeFilters" style="margin-top:6px;"></div>
-  <div id="shareSizeBtnBox"></div>
+  <div id="catalogoFilters">
+    <div class="scroll-row" id="catFilters"></div>
+    <div class="scroll-row" id="sizeFilters" style="margin-top:6px;"></div>
+    <div id="shareSizeBtnBox"></div>
+  </div>
 </div>
 
-<div id="grid" class="grid"></div>
-<div id="emptyState" class="empty" style="display:none;"></div>
+<div id="catalogoSection">
+  <div id="grid" class="grid"></div>
+  <div id="emptyState" class="empty" style="display:none;"></div>
+</div>
 
-<button class="fab" onclick="openAddForm()">+</button>
+<div id="stockSection" style="display:none;">
+  <div id="stockList" class="stock-list-wrap"></div>
+  <div id="stockEmpty" class="empty" style="display:none;"></div>
+</div>
+
+<div id="ventasSection" style="display:none;">
+  <div class="summary-stats" id="ventasStats" style="margin:16px 16px 4px;"></div>
+  <div style="padding:0 16px;">
+    <label style="display:block;font-size:11px;font-weight:700;color:#6B6459;margin:8px 0 6px;">Historial de ventas</label>
+    <div id="ventasList"></div>
+  </div>
+</div>
+
+<button class="fab" id="fabBtn" onclick="openAddForm()">+</button>
 
 <div id="modalRoot"></div>
 <div id="toastRoot"></div>
@@ -132,6 +158,7 @@ const STATUSES = [
 ];
 
 let items = [];
+let activeTab = "catalogo";
 let activeCat = "all";
 let activeSize = "all";
 let searchQuery = "";
@@ -276,19 +303,47 @@ function renderGrid(){
           priceHtml +
         '</div>' +
         '<button class="share-btn" onclick="shareItem(\'' + item.id + '\')">↗</button>' +
-        '<button class="stock-btn" onclick="openStockQuick(\'' + item.id + '\')">📦</button>' +
       '</div>'
     );
   }).join("");
 }
 
 function renderAll(){
-  renderFilters();
-  renderGrid();
+  renderTabBar();
+  document.getElementById("catalogoSection").style.display = activeTab === "catalogo" ? "" : "none";
+  document.getElementById("catalogoFilters").style.display = activeTab === "catalogo" ? "" : "none";
+  document.getElementById("stockSection").style.display = activeTab === "stock" ? "" : "none";
+  document.getElementById("ventasSection").style.display = activeTab === "ventas" ? "" : "none";
+  document.getElementById("searchRow").style.display = activeTab === "ventas" ? "none" : "";
+  document.getElementById("fabBtn").style.display = activeTab === "catalogo" ? "flex" : "none";
+
+  if(activeTab === "catalogo"){
+    renderFilters();
+    renderGrid();
+  }else if(activeTab === "stock"){
+    renderStockTab();
+  }else if(activeTab === "ventas"){
+    renderVentasTab();
+  }
+
   document.getElementById("eyebrow").textContent =
     "INVENTARIO · " + items.length + " PRENDA" + (items.length===1?"":"S") +
     " · " + items.filter(i => i.status !== "vendido").length + " DISPONIBLE" +
     (items.filter(i => i.status !== "vendido").length===1?"":"S");
+}
+
+function renderTabBar(){
+  const tabs = [["catalogo","Catálogo"], ["stock","Stock"], ["ventas","Ventas"]];
+  document.getElementById("tabBar").innerHTML = tabs.map(([id, label]) =>
+    '<button class="tab-btn ' + (activeTab===id?"active":"") + '" onclick="setTab(\'' + id + '\')">' + label + '</button>'
+  ).join("");
+}
+function setTab(tab){
+  activeTab = tab;
+  searchQuery = "";
+  const searchInput = document.getElementById("search");
+  if(searchInput) searchInput.value = "";
+  renderAll();
 }
 
 /* ---------- Formulario agregar / editar ---------- */
@@ -501,61 +556,67 @@ function openDetail(id){
   openEditForm(id);
 }
 
-/* ---------- Stock rápido (sin tocar foto/formulario) ---------- */
-function openStockQuick(itemId){
-  const item = items.find(i => i.id === itemId);
-  if(!item) return;
-  const c = catLabel(item.category);
-  document.getElementById("modalRoot").innerHTML =
-    '<div class="overlay" onclick="closeModal(event)">' +
-      '<div class="sheet" onclick="event.stopPropagation()" style="position:relative;">' +
-        '<button class="close-x" onclick="closeModal()">✕</button>' +
-        '<h2>' + esc(item.name) + '</h2>' +
-        '<p style="margin:0 0 14px;font-size:12px;color:#6B6459;">' + esc(c) + '</p>' +
-        '<div id="qtyRows"></div>' +
-        '<p class="size-hint">＋ agrega stock (repuso mercadería) · − corrige un error de carga · Vendido descuenta 1 y lo anota en el resumen.</p>' +
-      '</div>' +
-    '</div>';
-  window.stockQuickItemId = itemId;
-  renderQtyRows();
-}
+/* ---------- Pestaña Stock ---------- */
+function renderStockTab(){
+  const box = document.getElementById("stockList");
+  const empty = document.getElementById("stockEmpty");
+  const q = searchQuery.trim().toLowerCase();
+  const filtered = items.filter(i => !q || (i.name||"").toLowerCase().includes(q) || (i.color||"").toLowerCase().includes(q));
 
-function renderQtyRows(){
-  const box = document.getElementById("qtyRows");
-  if(!box) return;
-  const item = items.find(i => i.id === window.stockQuickItemId);
-  if(!item){ box.innerHTML = ""; return; }
-  const sizesArr = item.sizes || [];
-  if(sizesArr.length === 0){
-    box.innerHTML = '<p class="size-hint">Esta prenda no tiene talles cargados todavía. Editala desde la tarjeta para agregarlos.</p>';
+  if(filtered.length === 0){
+    box.style.display = "none";
+    empty.style.display = "block";
+    empty.innerHTML = items.length === 0
+      ? "<h3>Todavía no cargaste prendas</h3><p>Andá a la pestaña Catálogo para agregar la primera con su foto.</p>"
+      : "<h3>Sin resultados</h3><p>Probá con otra búsqueda.</p>";
     return;
   }
-  box.innerHTML = sizesArr.map((s, idx) =>
-    '<div class="qty-row">' +
-      '<span class="qty-label">Talle <b>' + esc(s.size) + '</b> — stock: <b>' + s.qty + '</b></span>' +
-      '<div class="qty-controls">' +
-        '<button type="button" onclick="adjustQty(' + idx + ', -1)">−</button>' +
-        '<button type="button" onclick="adjustQty(' + idx + ', 1)">＋</button>' +
-        '<button type="button" class="sell-btn" onclick="sellOne(' + idx + ')">Vendido</button>' +
-      '</div>' +
-    '</div>'
-  ).join("");
+  box.style.display = "block";
+  empty.style.display = "none";
+  box.innerHTML = filtered.map(item => stockCardHtml(item)).join("");
 }
 
-function adjustQty(sizeIdx, delta){
-  const item = items.find(i => i.id === window.stockQuickItemId);
+function stockCardHtml(item){
+  const sizesArr = item.sizes || [];
+  const totalQty = sizesArr.reduce((a,s) => a + (Number(s.qty)||0), 0);
+  const photoHtml = item.photo ? '<img src="' + item.photo + '" />' : '👕';
+  const rows = sizesArr.length === 0
+    ? '<p class="size-hint">Sin talles cargados. Agregalos editando la prenda desde Catálogo.</p>'
+    : sizesArr.map((s, idx) =>
+        '<div class="qty-row">' +
+          '<span class="qty-label">Talle <b>' + esc(s.size) + '</b> — stock: <b>' + s.qty + '</b></span>' +
+          '<div class="qty-controls">' +
+            '<button type="button" onclick="adjustQtyDirect(\'' + item.id + '\', ' + idx + ', -1)">−</button>' +
+            '<button type="button" onclick="adjustQtyDirect(\'' + item.id + '\', ' + idx + ', 1)">＋</button>' +
+            '<button type="button" class="sell-btn" onclick="sellOneDirect(\'' + item.id + '\', ' + idx + ')">Vendido</button>' +
+          '</div>' +
+        '</div>'
+      ).join("");
+  return (
+    '<div class="stock-card">' +
+      '<div class="stock-card-head">' +
+        '<div class="stock-thumb">' + photoHtml + '</div>' +
+        '<div><p class="stock-name">' + esc(item.name) + '</p>' +
+        '<p class="stock-meta">' + esc(catLabel(item.category)) + ' · Stock total: ' + totalQty + '</p></div>' +
+      '</div>' +
+      rows +
+    '</div>'
+  );
+}
+
+function adjustQtyDirect(itemId, sizeIdx, delta){
+  const item = items.find(i => i.id === itemId);
   if(!item || !item.sizes || !item.sizes[sizeIdx]) return;
   item.sizes[sizeIdx].qty += delta;
   if(item.sizes[sizeIdx].qty <= 0){
     item.sizes.splice(sizeIdx, 1);
   }
   saveItems();
-  renderQtyRows();
   renderAll();
 }
 
-function sellOne(sizeIdx){
-  const item = items.find(i => i.id === window.stockQuickItemId);
+function sellOneDirect(itemId, sizeIdx){
+  const item = items.find(i => i.id === itemId);
   if(!item || !item.sizes || !item.sizes[sizeIdx]) return;
   const sizeEntry = item.sizes[sizeIdx];
   const soldSize = sizeEntry.size;
@@ -576,18 +637,23 @@ function sellOne(sizeIdx){
   });
   saveSold();
   showToast("Vendido: " + item.name + " talle " + soldSize);
-  renderQtyRows();
   renderAll();
 }
 
-/* ---------- Resumen de stock y vendidos ---------- */
-function openSummary(){
+/* ---------- Pestaña Ventas ---------- */
+function renderVentasTab(){
   const totalStock = items.reduce((a,i) => a + (i.sizes||[]).reduce((b,s) => b + (Number(s.qty)||0), 0), 0);
   const totalSoldQty = soldLog.reduce((a,l) => a + (Number(l.qty)||0), 0);
   const totalRevenue = soldLog.reduce((a,l) => a + (l.price ? Number(l.price)*Number(l.qty||1) : 0), 0);
 
-  const soldRows = soldLog.length === 0
-    ? '<p class="size-hint">Todavía no marcaste ninguna venta.</p>'
+  document.getElementById("ventasStats").innerHTML =
+    '<div class="summary-stat"><span class="num">' + totalStock + '</span><span class="lbl">En stock</span></div>' +
+    '<div class="summary-stat"><span class="num">' + totalSoldQty + '</span><span class="lbl">Vendidos</span></div>' +
+    '<div class="summary-stat"><span class="num">$' + formatPrice(totalRevenue) + '</span><span class="lbl">Recaudado</span></div>';
+
+  const list = document.getElementById("ventasList");
+  list.innerHTML = soldLog.length === 0
+    ? '<p class="size-hint">Todavía no marcaste ninguna venta. Desde la pestaña Stock tocá "Vendido" para registrar una.</p>'
     : soldLog.map(l => {
         const fecha = new Date(l.date);
         const fechaStr = fecha.toLocaleDateString("es", {day:"2-digit", month:"2-digit"});
@@ -596,21 +662,6 @@ function openSummary(){
           '<br><span class="meta">' + fechaStr + '</span></span>' +
           '<button type="button" class="undo-btn" onclick="undoSold(\'' + l.id + '\')">↺ Deshacer</button></div>';
       }).join("");
-
-  document.getElementById("modalRoot").innerHTML =
-    '<div class="overlay" onclick="closeModal(event)">' +
-      '<div class="sheet" onclick="event.stopPropagation()" style="position:relative;">' +
-        '<button class="close-x" onclick="closeModal()">✕</button>' +
-        '<h2>Stock y vendidos</h2>' +
-        '<div class="summary-stats">' +
-          '<div class="summary-stat"><span class="num">' + totalStock + '</span><span class="lbl">En stock</span></div>' +
-          '<div class="summary-stat"><span class="num">' + totalSoldQty + '</span><span class="lbl">Vendidos</span></div>' +
-          '<div class="summary-stat"><span class="num">$' + formatPrice(totalRevenue) + '</span><span class="lbl">Recaudado</span></div>' +
-        '</div>' +
-        '<label>Historial de ventas</label>' +
-        soldRows +
-      '</div>' +
-    '</div>';
 }
 
 function undoSold(logId){
@@ -629,7 +680,6 @@ function undoSold(logId){
   soldLog = soldLog.filter(l => l.id !== logId);
   saveSold();
   renderAll();
-  openSummary();
 }
 
 /* ---------- Compartir ---------- */
@@ -719,7 +769,8 @@ async function shareItem(id){
 /* ---------- Buscador ---------- */
 document.getElementById("search").addEventListener("input", function(e){
   searchQuery = e.target.value;
-  renderGrid();
+  if(activeTab === "catalogo") renderGrid();
+  else if(activeTab === "stock") renderStockTab();
 });
 
 /* ---------- Inicio ---------- */

@@ -1,4 +1,4 @@
-const CACHE_NAME = "mi-armario-v4";
+const CACHE_NAME = "mi-armario-v5";
 const FILES_TO_CACHE = [
   "./index.html",
   "./manifest.json",
