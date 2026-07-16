@@ -69,6 +69,21 @@
   .size-entry-row .rm { background: none; border: none; color: #B23A2E; font-size: 17px; font-weight: 700; padding: 0 4px; }
   .size-hint { font-size: 11.5px; color: #6B6459; margin-top: 4px; }
   .card .tags2 { font-size: 10.5px; color: #4A443C; margin: 0 0 4px; line-height: 1.5; }
+  .summary-open-btn { display: block; width: 100%; text-align: left; background: #F7F4EC; border: 1.5px solid #221F1C; border-radius: 10px; padding: 10px 12px; font-size: 13px; font-weight: 700; color: #221F1C; margin-bottom: 10px; }
+  .stock-btn { position: absolute; bottom: 6px; left: 6px; width: 26px; height: 26px; border-radius: 999px; background: rgba(34,31,28,0.85); color: #fff; border: none; font-size: 13px; }
+  .qty-row { display: flex; align-items: center; justify-content: space-between; background: #fff; border: 1px solid #D8D0BE; border-radius: 9px; padding: 9px 10px; margin-bottom: 8px; }
+  .qty-row .qty-label { font-size: 14px; }
+  .qty-row .qty-label b { font-family: monospace; }
+  .qty-controls { display: flex; align-items: center; gap: 6px; }
+  .qty-controls button { width: 30px; height: 30px; border-radius: 8px; border: 1.5px solid #221F1C; background: #fff; font-size: 16px; font-weight: 700; color: #221F1C; }
+  .qty-controls .sell-btn { width: auto; padding: 0 10px; font-size: 11px; background: #221F1C; color: #fff; border-color: #221F1C; }
+  .summary-stats { display: flex; gap: 10px; margin: 10px 0 16px; }
+  .summary-stat { flex: 1; background: #EDE7DA; border-radius: 10px; padding: 12px; text-align: center; }
+  .summary-stat .num { font-size: 22px; font-weight: 800; display: block; }
+  .summary-stat .lbl { font-size: 10.5px; color: #6B6459; text-transform: uppercase; letter-spacing: 0.03em; }
+  .sold-row { display: flex; align-items: center; justify-content: space-between; background: #fff; border: 1px solid #D8D0BE; border-radius: 9px; padding: 9px 10px; margin-bottom: 6px; font-size: 13px; }
+  .sold-row .undo-btn { background: none; border: none; color: #B23A2E; font-size: 11px; font-weight: 700; white-space: nowrap; margin-left: 8px; }
+  .sold-row .meta { color: #6B6459; font-size: 11.5px; }
 </style>
 </head>
 <body>
@@ -77,6 +92,7 @@
   <p class="eyebrow" id="eyebrow">INVENTARIO</p>
   <h1>Ropita en venta</h1>
   <p class="privacy-note">🔒 Esto queda guardado solo en este celular. Nadie más lo ve.</p>
+  <button class="summary-open-btn" onclick="openSummary()">📊 Ver stock y vendidos</button>
   <div class="search-row">
     <span>🔍</span>
     <input type="text" id="search" placeholder="Buscar por nombre, color o nota..." />
@@ -150,6 +166,24 @@ function saveItems(){
     return true;
   }catch(e){
     showToast("No se pudo guardar (memoria llena). Borrá alguna prenda vieja o usá fotos más chicas.");
+    return false;
+  }
+}
+
+/* ---------- Registro de ventas (separado del inventario) ---------- */
+let soldLog = [];
+function loadSold(){
+  try{
+    const raw = localStorage.getItem("mi_armario_sold");
+    soldLog = raw ? JSON.parse(raw) : [];
+  }catch(e){ soldLog = []; }
+}
+function saveSold(){
+  try{
+    localStorage.setItem("mi_armario_sold", JSON.stringify(soldLog));
+    return true;
+  }catch(e){
+    showToast("No se pudo guardar el registro de ventas.");
     return false;
   }
 }
@@ -242,6 +276,7 @@ function renderGrid(){
           priceHtml +
         '</div>' +
         '<button class="share-btn" onclick="shareItem(\'' + item.id + '\')">↗</button>' +
+        '<button class="stock-btn" onclick="openStockQuick(\'' + item.id + '\')">📦</button>' +
       '</div>'
     );
   }).join("");
@@ -345,8 +380,21 @@ function renderSizeEntryList(){
   }
   box.innerHTML = window.formSizes.map((s, idx) =>
     '<div class="size-entry-row"><span>Talle <b>' + esc(s.size) + '</b> — cantidad: <b>' + s.qty + '</b></span>' +
-    '<button type="button" class="rm" onclick="removeSizeEntry(' + idx + ')">✕</button></div>'
+    '<div class="qty-controls">' +
+      '<button type="button" onclick="adjustFormSizeQty(' + idx + ', -1)">−</button>' +
+      '<button type="button" onclick="adjustFormSizeQty(' + idx + ', 1)">＋</button>' +
+      '<button type="button" class="rm" onclick="removeSizeEntry(' + idx + ')">✕</button>' +
+    '</div></div>'
   ).join("");
+}
+
+function adjustFormSizeQty(idx, delta){
+  if(!window.formSizes || !window.formSizes[idx]) return;
+  window.formSizes[idx].qty += delta;
+  if(window.formSizes[idx].qty <= 0){
+    window.formSizes.splice(idx, 1);
+  }
+  renderSizeEntryList();
 }
 
 function addSizeEntry(){
@@ -453,6 +501,137 @@ function openDetail(id){
   openEditForm(id);
 }
 
+/* ---------- Stock rápido (sin tocar foto/formulario) ---------- */
+function openStockQuick(itemId){
+  const item = items.find(i => i.id === itemId);
+  if(!item) return;
+  const c = catLabel(item.category);
+  document.getElementById("modalRoot").innerHTML =
+    '<div class="overlay" onclick="closeModal(event)">' +
+      '<div class="sheet" onclick="event.stopPropagation()" style="position:relative;">' +
+        '<button class="close-x" onclick="closeModal()">✕</button>' +
+        '<h2>' + esc(item.name) + '</h2>' +
+        '<p style="margin:0 0 14px;font-size:12px;color:#6B6459;">' + esc(c) + '</p>' +
+        '<div id="qtyRows"></div>' +
+        '<p class="size-hint">＋ agrega stock (repuso mercadería) · − corrige un error de carga · Vendido descuenta 1 y lo anota en el resumen.</p>' +
+      '</div>' +
+    '</div>';
+  window.stockQuickItemId = itemId;
+  renderQtyRows();
+}
+
+function renderQtyRows(){
+  const box = document.getElementById("qtyRows");
+  if(!box) return;
+  const item = items.find(i => i.id === window.stockQuickItemId);
+  if(!item){ box.innerHTML = ""; return; }
+  const sizesArr = item.sizes || [];
+  if(sizesArr.length === 0){
+    box.innerHTML = '<p class="size-hint">Esta prenda no tiene talles cargados todavía. Editala desde la tarjeta para agregarlos.</p>';
+    return;
+  }
+  box.innerHTML = sizesArr.map((s, idx) =>
+    '<div class="qty-row">' +
+      '<span class="qty-label">Talle <b>' + esc(s.size) + '</b> — stock: <b>' + s.qty + '</b></span>' +
+      '<div class="qty-controls">' +
+        '<button type="button" onclick="adjustQty(' + idx + ', -1)">−</button>' +
+        '<button type="button" onclick="adjustQty(' + idx + ', 1)">＋</button>' +
+        '<button type="button" class="sell-btn" onclick="sellOne(' + idx + ')">Vendido</button>' +
+      '</div>' +
+    '</div>'
+  ).join("");
+}
+
+function adjustQty(sizeIdx, delta){
+  const item = items.find(i => i.id === window.stockQuickItemId);
+  if(!item || !item.sizes || !item.sizes[sizeIdx]) return;
+  item.sizes[sizeIdx].qty += delta;
+  if(item.sizes[sizeIdx].qty <= 0){
+    item.sizes.splice(sizeIdx, 1);
+  }
+  saveItems();
+  renderQtyRows();
+  renderAll();
+}
+
+function sellOne(sizeIdx){
+  const item = items.find(i => i.id === window.stockQuickItemId);
+  if(!item || !item.sizes || !item.sizes[sizeIdx]) return;
+  const sizeEntry = item.sizes[sizeIdx];
+  const soldSize = sizeEntry.size;
+  sizeEntry.qty -= 1;
+  if(sizeEntry.qty <= 0){
+    item.sizes.splice(sizeIdx, 1);
+  }
+  saveItems();
+  soldLog.unshift({
+    id: "s" + Date.now(),
+    itemId: item.id,
+    itemName: item.name,
+    category: item.category,
+    size: soldSize,
+    qty: 1,
+    price: item.price || "",
+    date: new Date().toISOString(),
+  });
+  saveSold();
+  showToast("Vendido: " + item.name + " talle " + soldSize);
+  renderQtyRows();
+  renderAll();
+}
+
+/* ---------- Resumen de stock y vendidos ---------- */
+function openSummary(){
+  const totalStock = items.reduce((a,i) => a + (i.sizes||[]).reduce((b,s) => b + (Number(s.qty)||0), 0), 0);
+  const totalSoldQty = soldLog.reduce((a,l) => a + (Number(l.qty)||0), 0);
+  const totalRevenue = soldLog.reduce((a,l) => a + (l.price ? Number(l.price)*Number(l.qty||1) : 0), 0);
+
+  const soldRows = soldLog.length === 0
+    ? '<p class="size-hint">Todavía no marcaste ninguna venta.</p>'
+    : soldLog.map(l => {
+        const fecha = new Date(l.date);
+        const fechaStr = fecha.toLocaleDateString("es", {day:"2-digit", month:"2-digit"});
+        const priceStr = l.price ? " · $" + formatPrice(l.price) : "";
+        return '<div class="sold-row"><span>' + esc(l.itemName) + ' — talle ' + esc(l.size) + ' (x' + l.qty + ')' + priceStr +
+          '<br><span class="meta">' + fechaStr + '</span></span>' +
+          '<button type="button" class="undo-btn" onclick="undoSold(\'' + l.id + '\')">↺ Deshacer</button></div>';
+      }).join("");
+
+  document.getElementById("modalRoot").innerHTML =
+    '<div class="overlay" onclick="closeModal(event)">' +
+      '<div class="sheet" onclick="event.stopPropagation()" style="position:relative;">' +
+        '<button class="close-x" onclick="closeModal()">✕</button>' +
+        '<h2>Stock y vendidos</h2>' +
+        '<div class="summary-stats">' +
+          '<div class="summary-stat"><span class="num">' + totalStock + '</span><span class="lbl">En stock</span></div>' +
+          '<div class="summary-stat"><span class="num">' + totalSoldQty + '</span><span class="lbl">Vendidos</span></div>' +
+          '<div class="summary-stat"><span class="num">$' + formatPrice(totalRevenue) + '</span><span class="lbl">Recaudado</span></div>' +
+        '</div>' +
+        '<label>Historial de ventas</label>' +
+        soldRows +
+      '</div>' +
+    '</div>';
+}
+
+function undoSold(logId){
+  const log = soldLog.find(l => l.id === logId);
+  if(!log) return;
+  const item = items.find(i => i.id === log.itemId);
+  if(item){
+    if(!item.sizes) item.sizes = [];
+    const existing = item.sizes.find(s => s.size === log.size);
+    if(existing){ existing.qty += log.qty; }
+    else { item.sizes.push({size: log.size, qty: log.qty}); }
+    saveItems();
+  }else{
+    showToast("Esa prenda ya no existe, se borró el registro pero no se pudo devolver el stock.");
+  }
+  soldLog = soldLog.filter(l => l.id !== logId);
+  saveSold();
+  renderAll();
+  openSummary();
+}
+
 /* ---------- Compartir ---------- */
 function itemToText(item){
   let t = item.name + " — " + catLabel(item.category);
@@ -545,6 +724,7 @@ document.getElementById("search").addEventListener("input", function(e){
 
 /* ---------- Inicio ---------- */
 loadItems();
+loadSold();
 renderAll();
 </script>
 <script>
