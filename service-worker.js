@@ -1,4 +1,4 @@
-const CACHE_NAME = "mi-armario-v5";
+const CACHE_NAME = "mi-armario-v6";
 const FILES_TO_CACHE = [
   "./index.html",
   "./manifest.json",
@@ -24,13 +24,17 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+/* Estrategia "red primero": siempre intenta traer la versión más nueva.
+   Si no hay internet, recién ahí usa la copia guardada. Esto evita que
+   la app se quede pegada mostrando una versión vieja. */
 self.addEventListener("fetch", (event) => {
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return (
-        cached ||
-        fetch(event.request).catch(() => caches.match("./index.html"))
-      );
-    })
+    fetch(event.request)
+      .then((response) => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request).then((cached) => cached || caches.match("./index.html")))
   );
 });
